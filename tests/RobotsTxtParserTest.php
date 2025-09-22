@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace WizardCompass\RobotsTxtParser\Tests;
 
 use InvalidArgumentException;
-use WizardCompass\RobotsTxtParser\RobotsTxtParser;
 use PHPUnit\Framework\TestCase;
+use WizardCompass\RobotsTxtParser\RobotsTxtParser;
 
 class RobotsTxtParserTest extends TestCase
 {

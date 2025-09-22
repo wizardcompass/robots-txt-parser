@@ -1,5 +1,5 @@
 {
-    "name": "leopoletto/robots-txt-parser",
+    "name": "wizardcompass/robots-txt-parser",
     "description": "A PHP library to parse and analyze robots.txt files with validation and URL fetching capabilities",
     "type": "library",
     "license": "MIT",
@@ -29,7 +29,7 @@
         }
     },
     "scripts": {
-        "test": "phpunit",
+        "test": "phpunit --no-coverage",
         "test-coverage": "phpunit --coverage-html coverage",
         "phpstan": "phpstan analyse --memory-limit=1G",
         "phpstan-baseline": "phpstan analyse --generate-baseline",

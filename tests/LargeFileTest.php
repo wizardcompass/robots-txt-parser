@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace WizardCompass\RobotsTxtParser\Tests;
 
-use WizardCompass\RobotsTxtParser\RobotsTxtParser;
 use PHPUnit\Framework\TestCase;
+use WizardCompass\RobotsTxtParser\RobotsTxtParser;
 
 class LargeFileTest extends TestCase
 {
