@@ -21,7 +21,7 @@ A comprehensive PHP library for parsing and analyzing robots.txt files. This pac
 Install via Composer:
 
 ```bash
-composer require leopoletto/robots-txt-parser
+composer require wizardcompass/robots-txt-parser
 ```
 
 ## Requirements
