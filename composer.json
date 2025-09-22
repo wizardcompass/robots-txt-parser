@@ -1,0 +1,37 @@
+{
+    "name": "leopoletto/robots-txt-parser",
+    "description": "A PHP library to parse and analyze robots.txt files with validation and URL fetching capabilities",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Leopold Etto",
+            "email": "contact@leopoletto.com"
+        }
+    ],
+    "require": {
+        "php": ">=8.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Leopoletto\\RobotsTxtParser\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Leopoletto\\RobotsTxtParser\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test-coverage": "phpunit --coverage-html coverage"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

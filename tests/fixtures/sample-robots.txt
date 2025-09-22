@@ -1,0 +1,23 @@
+# www.robotstxt.org/
+# www.google.com/support/webmasters/bin/answer.py?hl=en&answer=156449
+Sitemap: https://www.example.com/sitemap.xml
+
+User-agent: *
+Disallow: /health
+Disallow: /review/
+Disallow: /arrange-viewings/add/
+Disallow: /arrange-viewings/remove/
+Disallow: /_*
+Disallow: /data
+Disallow: /*.json$
+Disallow: /*/*-c*/entry-requirement-description?entryRequirementIndex=
+Disallow: /*/*-c*/english-requirement-description?englishRequirementIndex=
+Disallow: /*/courses/*/courses
+Disallow: /*/*-c*/description
+Disallow: /*/*-c*/fees
+
+User-agent: ShopWiki
+Disallow: /
+
+User-agent: GPTBot
+Disallow: /
