@@ -2,14 +2,17 @@
 
 declare(strict_types=1);
 
-namespace Leopoletto\RobotsTxtParser;
+namespace WizardCompass\RobotsTxtParser;
 
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Exception\RequestException;
 use InvalidArgumentException;
 use RuntimeException;
 
 /**
  * A PHP library to parse and analyze robots.txt files
- * 
+ *
  * This class provides functionality to:
  * - Parse robots.txt content and analyze directives
  * - Fetch and parse robots.txt from URLs with size limits
@@ -32,8 +35,8 @@ class RobotsTxtParser
      * Parse a robots.txt file content into the specified format
      *
      * @param string $content The robots.txt file content
-     * @param array $options Additional options (status, redirected)
-     * @return array Parsed robots.txt data
+     * @param array{status?: int, redirected?: bool} $options Additional options (status, redirected)
+     * @return array{comment_count: int, over_google_limit: bool, record_counts: array, sitemaps: array<string>, redirected: bool, size: int, size_kib: float, status: int} Parsed robots.txt data
      */
     public function parse(string $content, array $options = []): array
     {
@@ -54,16 +57,20 @@ class RobotsTxtParser
                 'noindex' => 0,
                 'other' => 0,
                 'sitemap' => 0,
-                'user_agent' => 0
+                'user_agent' => 0,
             ],
-            'by_useragent' => []
+            'by_useragent' => [],
         ];
 
         $commentCount = 0;
         $currentUserAgent = null;
+        $sitemaps = [];
 
         // Split content into lines and process (handle all line ending types)
         $lines = preg_split('/\r\n|\n|\r/', $content);
+        if ($lines === false) {
+            $lines = [$content]; // Fallback to treating as single line
+        }
 
         foreach ($lines as $line) {
             $line = trim($line);
@@ -76,6 +83,7 @@ class RobotsTxtParser
             // Count comments
             if (str_starts_with($line, '#')) {
                 $commentCount++;
+
                 continue;
             }
 
@@ -95,15 +103,16 @@ class RobotsTxtParser
                     $recordCounts['by_type']['user_agent']++;
 
                     // Initialize user agent counters if not exists
-                    if (!isset($recordCounts['by_useragent'][$currentUserAgent])) {
+                    if (! isset($recordCounts['by_useragent'][$currentUserAgent])) {
                         $recordCounts['by_useragent'][$currentUserAgent] = [
                             'allow' => 0,
                             'crawl_delay' => 0,
                             'disallow' => 0,
                             'noindex' => 0,
-                            'other' => 0
+                            'other' => 0,
                         ];
                     }
+
                     break;
 
                 case 'allow':
@@ -111,6 +120,7 @@ class RobotsTxtParser
                     if ($currentUserAgent !== null) {
                         $recordCounts['by_useragent'][$currentUserAgent]['allow']++;
                     }
+
                     break;
 
                 case 'disallow':
@@ -118,6 +128,7 @@ class RobotsTxtParser
                     if ($currentUserAgent !== null) {
                         $recordCounts['by_useragent'][$currentUserAgent]['disallow']++;
                     }
+
                     break;
 
                 case 'crawl-delay':
@@ -126,6 +137,7 @@ class RobotsTxtParser
                     if ($currentUserAgent !== null) {
                         $recordCounts['by_useragent'][$currentUserAgent]['crawl_delay']++;
                     }
+
                     break;
 
                 case 'noindex':
@@ -133,10 +145,16 @@ class RobotsTxtParser
                     if ($currentUserAgent !== null) {
                         $recordCounts['by_useragent'][$currentUserAgent]['noindex']++;
                     }
+
                     break;
 
                 case 'sitemap':
                     $recordCounts['by_type']['sitemap']++;
+                    // Collect sitemap URLs
+                    if (! empty($value)) {
+                        $sitemaps[] = $value;
+                    }
+
                     break;
 
                 default:
@@ -145,6 +163,7 @@ class RobotsTxtParser
                     if ($currentUserAgent !== null) {
                         $recordCounts['by_useragent'][$currentUserAgent]['other']++;
                     }
+
                     break;
             }
         }
@@ -153,109 +172,146 @@ class RobotsTxtParser
             'comment_count' => $commentCount,
             'over_google_limit' => $overGoogleLimit,
             'record_counts' => $recordCounts,
+            'sitemaps' => $sitemaps,
             'redirected' => $redirected,
             'size' => $size,
             'size_kib' => $sizeKib,
-            'status' => $status
+            'status' => $status,
         ];
     }
 
     /**
-     * Parse robots.txt from a URL with streaming support and size limits
+     * Parse robots.txt from a URL with automatic robots.txt path resolution
      *
-     * @param string $url URL to fetch robots.txt from
+     * @param string $url URL to fetch robots.txt from (automatically appends /robots.txt if not present)
      * @param int $timeout Request timeout in seconds
-     * @return array Parsed robots.txt data
+     * @return array{comment_count: int, over_google_limit: bool, record_counts: array, sitemaps: array<string>, redirected: bool, size: int, size_kib: float, status: int, size_limit_exceeded?: bool, partial_content?: bool} Parsed robots.txt data
      * @throws InvalidArgumentException If URL is invalid
      * @throws RuntimeException If fetch fails or exceeds size limit
      */
     public function parseFromUrl(string $url, int $timeout = self::DEFAULT_TIMEOUT): array
     {
-        // Validate URL
-        if (!filter_var($url, FILTER_VALIDATE_URL)) {
-            throw new InvalidArgumentException("Invalid URL provided: {$url}");
-        }
-
-        // Create stream context with timeout
-        $context = stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'timeout' => $timeout,
-                'user_agent' => 'Leopoletto-RobotsTxtParser/1.0 (+https://github.com/leopoletto/robots-txt-parser)',
-                'follow_location' => true,
-                'max_redirects' => 5
-            ]
-        ]);
-
-        $handle = fopen($url, 'r', false, $context);
-        
-        if (!$handle) {
-            throw new RuntimeException("Failed to open URL: {$url}");
-        }
-
-        $content = '';
-        $totalBytes = 0;
-        $exceedsLimit = false;
+        // Validate and normalize URL
+        $robotsUrl = $this->normalizeRobotsUrl($url);
 
         try {
+            $client = new Client([
+                'timeout' => $timeout,
+                'allow_redirects' => [
+                    'max' => 5,
+                    'track_redirects' => true,
+                ],
+                'headers' => [
+                    'User-Agent' => 'WizardCompass-RobotsTxtParser/1.0 (+https://github.com/wizardcompass/robots-txt-parser)',
+                ],
+            ]);
+
+            $response = $client->get($robotsUrl, [
+                'stream' => true, // Enable streaming for large files
+            ]);
+
+            $content = '';
+            $totalBytes = 0;
+            $exceedsLimit = false;
+            $body = $response->getBody();
+
             // Read in chunks to monitor size
-            while (!feof($handle)) {
-                $chunk = fread($handle, 8192); // 8KB chunks
-                
-                if ($chunk === false) {
-                    break;
-                }
+            while (! $body->eof()) {
+                $chunk = $body->read(8192); // 8KB chunks
 
                 $totalBytes += strlen($chunk);
-                
+
                 // Check if we're exceeding the Google limit
                 if ($totalBytes > self::GOOGLE_SIZE_LIMIT) {
                     $exceedsLimit = true;
+
                     break;
                 }
-                
+
                 $content .= $chunk;
             }
-        } finally {
-            fclose($handle);
-        }
 
-        // Get response metadata
-        $metadata = stream_get_meta_data($handle);
-        $status = 200; // Default status
-        $redirected = false;
+            // Get response information
+            $status = $response->getStatusCode();
+            $redirected = $this->hasRedirects($response);
 
-        // Parse HTTP response headers if available
-        if (isset($metadata['wrapper_data'])) {
-            foreach ($metadata['wrapper_data'] as $header) {
-                if (preg_match('/HTTP\/\d+\.\d+\s+(\d+)/', $header, $matches)) {
-                    $status = (int) $matches[1];
-                }
-                if (stripos($header, 'Location:') === 0) {
-                    $redirected = true;
-                }
+            $result = $this->parse($content, [
+                'status' => $status,
+                'redirected' => $redirected,
+            ]);
+
+            // Add information about size limit exceeded
+            if ($exceedsLimit) {
+                $result['size_limit_exceeded'] = true;
+                $result['partial_content'] = true;
             }
+
+            return $result;
+
+        } catch (RequestException $e) {
+            $status = $e->getResponse() ? $e->getResponse()->getStatusCode() : 0;
+
+            throw new RuntimeException("Failed to fetch robots.txt from {$robotsUrl}: {$e->getMessage()} (HTTP {$status})");
+        } catch (GuzzleException $e) {
+            throw new RuntimeException("Failed to fetch robots.txt from {$robotsUrl}: {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * Normalize URL to point to robots.txt
+     *
+     * @param string $url Input URL
+     * @return string Normalized robots.txt URL
+     * @throws InvalidArgumentException If URL is invalid
+     */
+    private function normalizeRobotsUrl(string $url): string
+    {
+        // Validate URL
+        if (! filter_var($url, FILTER_VALIDATE_URL)) {
+            throw new InvalidArgumentException("Invalid URL provided: {$url}");
         }
 
-        $result = $this->parse($content, [
-            'status' => $status,
-            'redirected' => $redirected
-        ]);
-
-        // Add information about size limit exceeded
-        if ($exceedsLimit) {
-            $result['size_limit_exceeded'] = true;
-            $result['partial_content'] = true;
+        $parsedUrl = parse_url($url);
+        if (! $parsedUrl || ! isset($parsedUrl['scheme'], $parsedUrl['host'])) {
+            throw new InvalidArgumentException("Invalid URL format: {$url}");
         }
 
-        return $result;
+        // Build base URL
+        $robotsUrl = $parsedUrl['scheme'] . '://' . $parsedUrl['host'];
+
+        // Add port if specified
+        if (isset($parsedUrl['port'])) {
+            $robotsUrl .= ':' . $parsedUrl['port'];
+        }
+
+        // Check if URL already points to robots.txt
+        $path = $parsedUrl['path'] ?? '';
+        if (! str_ends_with(strtolower($path), 'robots.txt')) {
+            $robotsUrl .= '/robots.txt';
+        } else {
+            $robotsUrl .= $path;
+        }
+
+        return $robotsUrl;
+    }
+
+    /**
+     * Check if the response was redirected
+     *
+     * @param \Psr\Http\Message\ResponseInterface $response
+     * @return bool
+     */
+    private function hasRedirects($response): bool
+    {
+        return $response->hasHeader('X-Guzzle-Redirect-History') ||
+               $response->hasHeader('X-Guzzle-Redirect-Status-History');
     }
 
     /**
      * Validate robots.txt syntax and provide warnings and errors
      *
      * @param string $content The robots.txt file content
-     * @return array Validation results with warnings and errors
+     * @return array{is_valid: bool, warnings: array<string>, errors: array<string>} Validation results with warnings and errors
      */
     public function validate(string $content): array
     {
@@ -263,6 +319,10 @@ class RobotsTxtParser
         $errors = [];
 
         $lines = preg_split('/\r\n|\n|\r/', $content);
+        if ($lines === false) {
+            $lines = [$content]; // Fallback to treating as single line
+        }
+
         $currentUserAgent = null;
         $lineNumber = 0;
 
@@ -278,6 +338,7 @@ class RobotsTxtParser
             $colonPos = strpos($line, ':');
             if ($colonPos === false) {
                 $errors[] = "Line {$lineNumber}: Invalid syntax - missing colon: \"{$originalLine}\"";
+
                 continue;
             }
 
@@ -287,10 +348,10 @@ class RobotsTxtParser
             // Validate directives
             $validDirectives = [
                 'user-agent', 'allow', 'disallow', 'crawl-delay', 'crawldelay',
-                'sitemap', 'noindex', 'request-rate', 'visit-time', 'host'
+                'sitemap', 'noindex', 'request-rate', 'visit-time', 'host',
             ];
 
-            if (!in_array($directive, $validDirectives, true)) {
+            if (! in_array($directive, $validDirectives, true)) {
                 $warnings[] = "Line {$lineNumber}: Unknown directive \"{$directive}\"";
             }
 
@@ -319,7 +380,7 @@ class RobotsTxtParser
 
             // Validate sitemap URL
             if ($directive === 'sitemap') {
-                if (!filter_var($value, FILTER_VALIDATE_URL)) {
+                if (! filter_var($value, FILTER_VALIDATE_URL)) {
                     $errors[] = "Line {$lineNumber}: Invalid sitemap URL: \"{$value}\"";
                 }
             }
@@ -328,7 +389,7 @@ class RobotsTxtParser
         return [
             'is_valid' => empty($errors),
             'warnings' => $warnings,
-            'errors' => $errors
+            'errors' => $errors,
         ];
     }
 }

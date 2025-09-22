@@ -8,11 +8,12 @@ A comprehensive PHP library for parsing and analyzing robots.txt files. This pac
 ## Features
 
 - 🚀 **Fast parsing** of robots.txt content with detailed statistics
-- 🌐 **URL fetching** with streaming support and size limits
+- 🌐 **Smart URL fetching** with automatic robots.txt path resolution
+- 🔄 **HTTP streaming** with Guzzle for reliable downloads and size limits
 - ✅ **Validation** with detailed error and warning reporting
 - 📊 **Comprehensive analysis** including directive counts by type and user agent
 - 🛡️ **Size protection** with Google's 500KB limit enforcement
-- 🔧 **Timeout handling** for large file downloads
+- 🔧 **Timeout handling** and redirect support
 - 📈 **Performance optimized** for large files (tested up to 5MB+)
 
 ## Installation
@@ -26,14 +27,14 @@ composer require leopoletto/robots-txt-parser
 ## Requirements
 
 - PHP 8.1 or higher
-- No additional dependencies for core functionality
+- Guzzle HTTP 7.0+ (for URL fetching)
 
 ## Quick Start
 
 ```php
 <?php
 
-use Leopoletto\RobotsTxtParser\RobotsTxtParser;
+use WizardCompass\RobotsTxtParser\RobotsTxtParser;
 
 $parser = new RobotsTxtParser();
 
@@ -41,8 +42,8 @@ $parser = new RobotsTxtParser();
 $robotsTxt = "User-agent: *\nDisallow: /admin\nAllow: /public";
 $result = $parser->parse($robotsTxt);
 
-// Parse from URL
-$result = $parser->parseFromUrl('https://example.com/robots.txt');
+// Parse from URL (automatically appends /robots.txt)
+$result = $parser->parseFromUrl('https://example.com');
 
 // Validate syntax
 $validation = $parser->validate($robotsTxt);
@@ -55,7 +56,7 @@ $validation = $parser->validate($robotsTxt);
 ```php
 <?php
 
-use Leopoletto\RobotsTxtParser\RobotsTxtParser;
+use WizardCompass\RobotsTxtParser\RobotsTxtParser;
 
 $parser = new RobotsTxtParser();
 
@@ -85,27 +86,39 @@ echo "Disallow rules: " . $result['record_counts']['by_type']['disallow'] . "\n"
 foreach ($result['record_counts']['by_useragent'] as $userAgent => $counts) {
     echo "User-agent '{$userAgent}' has {$counts['disallow']} disallow rules\n";
 }
+
+// Access sitemap information
+echo "Sitemaps found: " . count($result['sitemaps']) . "\n";
+foreach ($result['sitemaps'] as $sitemap) {
+    echo "Sitemap: {$sitemap}\n";
+}
 ```
 
 ### Fetching from URL
 
+The parser automatically handles robots.txt URL resolution. Just provide any URL and it will automatically fetch the robots.txt file from the root domain.
+
 ```php
 <?php
 
-use Leopoletto\RobotsTxtParser\RobotsTxtParser;
+use WizardCompass\RobotsTxtParser\RobotsTxtParser;
 
 $parser = new RobotsTxtParser();
 
 try {
-    // Fetch with default 30-second timeout
-    $result = $parser->parseFromUrl('https://example.com/robots.txt');
+    // All of these will fetch from https://example.com/robots.txt
+    $result = $parser->parseFromUrl('https://example.com');
+    $result = $parser->parseFromUrl('https://example.com/');
+    $result = $parser->parseFromUrl('https://example.com/some/page');
+    $result = $parser->parseFromUrl('https://example.com/robots.txt'); // explicit
     
-    // Fetch with custom timeout (60 seconds)
-    $result = $parser->parseFromUrl('https://example.com/robots.txt', 60);
+    // Custom timeout (60 seconds instead of default 30)
+    $result = $parser->parseFromUrl('https://example.com', 60);
     
     echo "Status: " . $result['status'] . "\n";
     echo "Redirected: " . ($result['redirected'] ? 'Yes' : 'No') . "\n";
     echo "Size: " . number_format($result['size_kib'], 2) . " KB\n";
+    echo "User agents found: " . count($result['record_counts']['by_useragent']) . "\n";
     
     if (isset($result['size_limit_exceeded'])) {
         echo "Warning: File exceeded 500KB limit and was truncated\n";
@@ -123,7 +136,7 @@ try {
 ```php
 <?php
 
-use Leopoletto\RobotsTxtParser\RobotsTxtParser;
+use WizardCompass\RobotsTxtParser\RobotsTxtParser;
 
 $parser = new RobotsTxtParser();
 
@@ -158,7 +171,7 @@ if (!empty($validation['warnings'])) {
 ```php
 <?php
 
-use Leopoletto\RobotsTxtParser\RobotsTxtParser;
+use WizardCompass\RobotsTxtParser\RobotsTxtParser;
 
 $parser = new RobotsTxtParser();
 
@@ -219,6 +232,10 @@ echo "- Other: {$recordCounts['other']}\n";
             ]
         ]
     ],
+    'sitemaps' => [                    // Array of sitemap URLs found
+        'https://example.com/sitemap.xml',
+        'https://example.com/sitemap-news.xml'
+    ],
     'redirected' => false,             // Whether URL was redirected
     'size' => 150,                     // File size in bytes
     'size_kib' => 0.146484375,        // File size in KiB
@@ -246,9 +263,10 @@ echo "- Other: {$recordCounts['other']}\n";
 This library implements Google's recommended 500KB size limit for robots.txt files:
 
 - **Parsing**: Files of any size can be parsed, with a warning flag for files exceeding 500KB
-- **URL Fetching**: Downloads are automatically terminated at 500KB to prevent memory issues
+- **URL Fetching**: Downloads are automatically terminated at 500KB using Guzzle streaming
 - **Performance**: Optimized for large files with efficient string processing
-- **Memory**: Uses streaming for URL downloads to minimize memory usage
+- **Memory**: Uses HTTP streaming to minimize memory usage
+- **Reliability**: Guzzle HTTP client provides robust error handling and redirect support
 
 ## Supported Directives
 

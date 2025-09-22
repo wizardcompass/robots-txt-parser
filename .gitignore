@@ -33,4 +33,20 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Project specific
 briefing.md
+
+# PHP CS Fixer
+.php-cs-fixer.cache
+
+# PHPStan
+phpstan-baseline.neon
+
+# Build and dist files
+build/
+dist/
+
+# MacOS specific (additional)
+.AppleDouble
+.LSOverride

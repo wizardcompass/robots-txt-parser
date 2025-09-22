@@ -2,7 +2,7 @@
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use Leopoletto\RobotsTxtParser\RobotsTxtParser;
+use WizardCompass\RobotsTxtParser\RobotsTxtParser;
 
 // Create parser instance
 $parser = new RobotsTxtParser();
@@ -54,6 +54,11 @@ foreach ($result['record_counts']['by_type'] as $type => $count) {
     }
 }
 
+echo "\nSitemaps found: " . count($result['sitemaps']) . "\n";
+foreach ($result['sitemaps'] as $sitemap) {
+    echo "  - $sitemap\n";
+}
+
 echo "\nUser agent specific counts:\n";
 foreach ($result['record_counts']['by_useragent'] as $userAgent => $counts) {
     echo "  - User-agent '$userAgent':\n";
@@ -85,14 +90,14 @@ $validation = $parser->validate($invalidRobotsTxt);
 
 echo "Is valid: " . ($validation['is_valid'] ? 'Yes' : 'No') . "\n";
 
-if (!empty($validation['errors'])) {
+if (! empty($validation['errors'])) {
     echo "\nErrors found:\n";
     foreach ($validation['errors'] as $error) {
         echo "  ❌ $error\n";
     }
 }
 
-if (!empty($validation['warnings'])) {
+if (! empty($validation['warnings'])) {
     echo "\nWarnings:\n";
     foreach ($validation['warnings'] as $warning) {
         echo "  ⚠️  $warning\n";
@@ -101,33 +106,50 @@ if (!empty($validation['warnings'])) {
 
 echo "\n" . str_repeat("=", 50) . "\n\n";
 
-// Example 3: URL fetching (commented out by default)
+// Example 3: URL fetching with automatic robots.txt resolution
 echo "🌐 Example 3: URL fetching\n";
 echo "--------------------------\n";
 
-echo "Note: URL fetching example is commented out.\n";
-echo "Uncomment the code below to test with a real URL.\n\n";
-
-/*
 try {
-    echo "Fetching robots.txt from https://www.google.com/robots.txt...\n";
-    $result = $parser->parseFromUrl('https://www.google.com/robots.txt');
-    
+    // Test with domain only - automatically appends /robots.txt
+    echo "Fetching robots.txt from https://www.google.com (auto-appends /robots.txt)...\n";
+    $result = $parser->parseFromUrl('https://www.google.com');
+
     echo "Status: " . $result['status'] . "\n";
     echo "Redirected: " . ($result['redirected'] ? 'Yes' : 'No') . "\n";
     echo "Size: " . number_format($result['size_kib'], 2) . " KB\n";
     echo "User agents found: " . count($result['record_counts']['by_useragent']) . "\n";
-    
+    echo "Sitemaps found: " . count($result['sitemaps']) . "\n";
+
     if (isset($result['size_limit_exceeded'])) {
         echo "⚠️  Warning: File exceeded 500KB limit and was truncated\n";
     }
-    
+
+    if (! empty($result['sitemaps'])) {
+        echo "\nSitemaps:\n";
+        foreach ($result['sitemaps'] as $sitemap) {
+            echo "  - $sitemap\n";
+        }
+    }
+
+    echo "\nTop 3 user agents by directive count:\n";
+    $userAgents = $result['record_counts']['by_useragent'];
+    arsort($userAgents);
+    $count = 0;
+    foreach ($userAgents as $agent => $counts) {
+        if ($count >= 3) {
+            break;
+        }
+        $totalDirectives = array_sum($counts);
+        echo "  - '{$agent}': {$totalDirectives} directives\n";
+        $count++;
+    }
+
 } catch (InvalidArgumentException $e) {
     echo "❌ Invalid URL: " . $e->getMessage() . "\n";
 } catch (RuntimeException $e) {
     echo "❌ Failed to fetch: " . $e->getMessage() . "\n";
 }
-*/
 
 echo "\n" . str_repeat("=", 50) . "\n\n";
 
