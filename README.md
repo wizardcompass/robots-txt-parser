@@ -1,6 +1,7 @@
 # Robots.txt Parser for PHP
 
 [![PHP Version](https://img.shields.io/badge/php-%3E%3D8.1-blue.svg)](https://php.net/)
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/spatie/robots-txt-parser.svg?style=flat-square)](https://packagist.org/packages/wizardcompass/robots-txt-parser)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A comprehensive PHP library for parsing and analyzing robots.txt files. This package provides functionality to fetch, parse, and validate robots.txt files with support for large files and streaming downloads.
