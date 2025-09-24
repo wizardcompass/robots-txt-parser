@@ -2,9 +2,14 @@
 
 All notable changes to `robots-txt-parser` will be documented in this file.
 
+## v1.0.2 - 2025-09-24
+
+**Full Changelog**: https://github.com/wizardcompass/robots-txt-parser/compare/v1.0.1...v1.0.2
+
 ## [Unreleased]
 
 ### Added
+
 - Initial release of the robots.txt parser
 - Parse robots.txt content with detailed statistics
 - URL fetching with streaming support and 500KB size limits
